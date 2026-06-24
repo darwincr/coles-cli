@@ -1,0 +1,16 @@
+.env
+.env.*
+.python-version
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.DS_Store
+dist/
+build/
+*.egg-info/
+.coles-cli/

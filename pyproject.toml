@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "coles-cli"
+version = "0.1.0"
+description = "CLI for driving Coles shopping through a real Camoufox browser session."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "darwincr" }]
+keywords = ["coles", "camoufox", "playwright", "browser-automation", "shopping", "cli"]
+dependencies = [
+    "camoufox>=0.4",
+    "playwright<1.60",
+    "termcolor",
+]
+
+[project.scripts]
+coles = "coles_cli.cli:main"
+coles-cli = "coles_cli.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/coles_cli"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
