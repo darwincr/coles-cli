@@ -63,7 +63,7 @@ def test_orders_list_accepts_positional_status():
     assert _orders_status(args) == "current"
 
 
-def test_orders_list_json_hides_unused_fields_for_every_status(capsys):
+def test_orders_list_json_includes_order_id_and_hides_internal_fields(capsys):
     _render(
         "orders-list",
         {
@@ -86,7 +86,7 @@ def test_orders_list_json_hides_unused_fields_for_every_status(capsys):
         True,
     )
 
-    assert capsys.readouterr().out == '{"ok": true, "count": 1, "orders": [{"index": 1, "status": "Delivered", "date": "1 Jan 2026", "total": "$10.00"}]}\n'
+    assert capsys.readouterr().out == '{"ok": true, "count": 1, "orders": [{"index": 1, "id": "262470014", "status": "Delivered", "date": "1 Jan 2026", "total": "$10.00"}]}\n'
 
 
 def test_json_payload_removes_urls_recursively():

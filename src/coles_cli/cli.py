@@ -115,7 +115,6 @@ def _json_payload(command: str, result: dict) -> dict:
     payload = _without_keys(result, {"url", "summary", "text"})
     if command == "orders-list":
         payload.pop("status", None)
-        payload["orders"] = [_without_keys(order, {"id"}) for order in payload.get("orders") or []]
     return payload
 
 
