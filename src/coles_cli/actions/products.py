@@ -46,13 +46,13 @@ def search_products(session, query: str, *, result_size: int = 48) -> dict:
     return {"ok": True, "query": query, "result_count": len(products), "products": public_products(products)}
 
 
-def add_product_to_cart(session, query: str, *, index: int, quantity: int = 1) -> dict:
+def add_product_to_cart(session, query: str, *, index: int, quantity: int | None = None) -> dict:
     query = normalize_space(query)
     if not query:
         raise ValueError("Search query cannot be empty")
     if index < 1:
         raise ValueError("--index must be 1 or greater")
-    if quantity < 1:
+    if quantity is not None and quantity < 1:
         raise ValueError("--set-quantity must be 1 or greater")
 
     page = session.page
@@ -70,6 +70,7 @@ def add_product_to_cart(session, query: str, *, index: int, quantity: int = 1) -
 
     selected = products[index - 1]
     quantity_state = _set_product_quantity(page, index=index, quantity=quantity)
+    target_quantity = _quantity_int(quantity_state.get("quantity")) or quantity or 1
     page.wait_for_timeout(1200)
     updated_products = _extract_products(page)
     updated = updated_products[index - 1] if len(updated_products) >= index else selected
@@ -78,18 +79,18 @@ def add_product_to_cart(session, query: str, *, index: int, quantity: int = 1) -
     if state.get("login_required"):
         raise InteractiveAuthenticationRequired(state.get("message") or "Coles requires login before adding this item to the trolley")
     updated_quantity = _quantity_int((updated or {}).get("quantity")) or _quantity_int(quantity_state.get("quantity")) or 0
-    if state.get("shopping_method_required") and updated_quantity >= quantity and not state.get("message"):
+    if state.get("shopping_method_required") and updated_quantity >= target_quantity and not state.get("message"):
         state = state | {"shopping_method_required": False}
-    if state.get("shopping_method_required") and updated_quantity < quantity:
+    if state.get("shopping_method_required") and updated_quantity < target_quantity:
         raise CartError(state.get("message") or "Coles is asking for a shopping method before the item can be added")
-    added = bool(updated_quantity >= quantity or updated.get("in_trolley") or (cart.get("total") and cart.get("total") != "$0.00"))
+    added = bool(updated_quantity >= target_quantity or updated.get("in_trolley") or (cart.get("total") and cart.get("total") != "$0.00"))
     return {
         "ok": True,
         "added": added,
         "query": query,
         "reused_current_search": reused,
         "index": index,
-        "target_quantity": quantity,
+        "target_quantity": target_quantity,
         "cart_quantity": updated_quantity or quantity_state.get("quantity"),
         "quantity_actions": quantity_state.get("actions") or [],
         "product": public_product(updated or selected),
@@ -302,15 +303,28 @@ def _click_add_button(page, *, index: int) -> None:
         raise CartError(f"Could not click add-to-trolley for product index {index}: {(clicked or {}).get('reason') or 'unknown reason'}")
 
 
-def _set_product_quantity(page, *, index: int, quantity: int) -> dict:
+def _set_product_quantity(page, *, index: int, quantity: int | None) -> dict:
     actions = []
     state = _product_tile_state(page, index=index)
     current = _quantity_int(state.get("quantity")) or 0
+    if quantity is None and current > 0:
+        target = current + 1
+        _click_quantity_button(page, index=index, action="increase")
+        actions.append("increase")
+        state = _wait_for_product_quantity(page, index=index, target=target)
+        current = _quantity_int(state.get("quantity")) or current
+        if current != target:
+            raise CartError(f"Could not increment product index {index} quantity to {target}; current quantity is {current or 'unknown'}")
+        return {"quantity": current, "actions": actions}
+
     if current == 0:
         _click_add_button(page, index=index)
         actions.append("add")
         state = _wait_for_product_quantity(page, index=index, minimum=1)
         current = _quantity_int(state.get("quantity")) or 0
+
+    if quantity is None:
+        return {"quantity": current, "actions": actions}
 
     deadline = time.monotonic() + max(10, quantity * 4)
     while current != quantity and time.monotonic() < deadline:

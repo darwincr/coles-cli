@@ -1,9 +1,11 @@
 from coles_cli.actions.cart import public_cart
 from coles_cli.actions.auth import ensure_logged_in
 from coles_cli.actions.orders import _expand_order_items, order_items, public_order_items
-from coles_cli.actions.products import search_products, search_url, public_product
+from coles_cli.actions.products import _set_product_quantity, search_products, search_url, public_product
 from coles_cli.cli import _json_payload, _orders_status, _parse_args, _query_text, _render
+from coles_cli.exceptions import CartError
 from coles_cli.worker import _request_existing_worker, _route_connection
+import pytest
 
 
 class FakeSocket:
@@ -218,7 +220,7 @@ def test_products_add_requires_index():
     assert args.verb == "products-add"
     assert _query_text(args) == "milk"
     assert args.index == 2
-    assert args.set_quantity == 1
+    assert args.set_quantity is None
 
 
 def test_products_add_accepts_set_quantity():
@@ -227,6 +229,44 @@ def test_products_add_accepts_set_quantity():
     assert _query_text(args) == "milk"
     assert args.index == 2
     assert args.set_quantity == 3
+
+
+def test_products_add_without_set_quantity_increments_existing_quantity(monkeypatch):
+    page = FakePage()
+    actions = []
+
+    monkeypatch.setattr("coles_cli.actions.products._product_tile_state", lambda _page, *, index: {"quantity": 3})
+    monkeypatch.setattr("coles_cli.actions.products._wait_for_product_quantity", lambda _page, *, index, target=None, minimum=None: {"quantity": target or minimum})
+    monkeypatch.setattr("coles_cli.actions.products._click_quantity_button", lambda _page, *, index, action: actions.append(action))
+
+    result = _set_product_quantity(page, index=1, quantity=None)
+
+    assert result == {"quantity": 4, "actions": ["increase"]}
+
+
+def test_products_add_without_set_quantity_adds_new_item_once(monkeypatch):
+    page = FakePage()
+    actions = []
+
+    monkeypatch.setattr("coles_cli.actions.products._product_tile_state", lambda _page, *, index: {"quantity": 0})
+    monkeypatch.setattr("coles_cli.actions.products._wait_for_product_quantity", lambda _page, *, index, target=None, minimum=None: {"quantity": target or minimum})
+    monkeypatch.setattr("coles_cli.actions.products._click_add_button", lambda _page, *, index: actions.append("add"))
+    monkeypatch.setattr("coles_cli.actions.products._click_quantity_button", lambda _page, *, index, action: actions.append(action))
+
+    result = _set_product_quantity(page, index=1, quantity=None)
+
+    assert result == {"quantity": 1, "actions": ["add"]}
+
+
+def test_products_add_without_set_quantity_errors_when_increment_not_confirmed(monkeypatch):
+    page = FakePage()
+
+    monkeypatch.setattr("coles_cli.actions.products._product_tile_state", lambda _page, *, index: {"quantity": 3})
+    monkeypatch.setattr("coles_cli.actions.products._wait_for_product_quantity", lambda _page, *, index, target=None, minimum=None: {"quantity": 3})
+    monkeypatch.setattr("coles_cli.actions.products._click_quantity_button", lambda _page, *, index, action: None)
+
+    with pytest.raises(CartError, match="Could not increment product index 1 quantity to 4"):
+        _set_product_quantity(page, index=1, quantity=None)
 
 
 def test_shoppingcart_alias():

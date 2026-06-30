@@ -388,7 +388,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_products_add = products_sub.add_parser("add", parents=[common], help="Add a search result to the trolley")
     _add_query_arg(p_products_add)
     p_products_add.add_argument("--index", type=int, required=True, help="1-based search result index to add")
-    p_products_add.add_argument("--set-quantity", type=int, default=1, help="Final trolley quantity for the product (default: 1)")
+    p_products_add.add_argument("--set-quantity", type=int, help="Set final trolley quantity for the product instead of incrementing by 1")
 
     cart_cmd = sub.add_parser("cart", help="Read and checkout the Coles trolley")
     _add_cart_subcommands(cart_cmd, common)
