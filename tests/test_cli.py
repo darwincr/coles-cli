@@ -335,6 +335,36 @@ def test_client_sends_command_when_worker_ping_reports_busy(monkeypatch, tmp_pat
     ]
 
 
+def test_worker_restarts_browser_once_when_driver_connection_closes(monkeypatch):
+    import coles_cli.cli as cli_module
+
+    from coles_cli.worker import _execute_request
+
+    calls = []
+    session = type(
+        "Session",
+        (),
+        {
+            "ensure_browser": lambda self: calls.append("ensure"),
+            "close": lambda self: calls.append("close"),
+        },
+    )()
+
+    def fake_execute_verb(_args, _session):
+        calls.append("execute")
+        if calls.count("execute") == 1:
+            raise Exception("Page.goto: Connection closed while reading from the driver")
+        return 0
+
+    monkeypatch.setattr(cli_module, "_execute_verb", fake_execute_verb)
+    monkeypatch.setattr(cli_module, "_parse_args", lambda _argv: type("Args", (), {"verb": "login"})())
+
+    result = _execute_request(session, ["login", "--interactive", "--wait", "--timeout", "300"])
+
+    assert result["returncode"] == 0
+    assert calls == ["ensure", "execute", "close", "ensure", "execute"]
+
+
 def test_cart_remove_requires_index():
     args = _parse_args(["cart", "remove", "--index", "2"])
     assert args.verb == "cart-remove"

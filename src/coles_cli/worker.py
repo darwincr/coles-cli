@@ -314,12 +314,22 @@ def _execute_request(session: ColesSession, argv: list[str]) -> dict:
                 session.close()
                 session.ensure_browser()
                 returncode = _execute_verb(args, session)
+            except Exception as exc:
+                if not _is_driver_connection_closed(exc):
+                    raise
+                session.close()
+                session.ensure_browser()
+                returncode = _execute_verb(args, session)
         except SystemExit as exc:
             returncode = int(exc.code or 0)
         except Exception as exc:  # noqa: BLE001
             returncode = 1
             print(f"error: {type(exc).__name__}: {exc}", file=sys.stderr)
     return {"returncode": returncode, "stdout": stdout.getvalue(), "stderr": stderr.getvalue()}
+
+
+def _is_driver_connection_closed(exc: Exception) -> bool:
+    return "Connection closed while reading from the driver" in str(exc)
 
 
 def serve(name: str) -> int:
